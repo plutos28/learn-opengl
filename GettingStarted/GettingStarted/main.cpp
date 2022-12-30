@@ -31,6 +31,11 @@ int main() {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
+
+#ifdef __APPLE__
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#endif
+
 	// GLFW: window creation
 	GLFWwindow* window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, TITLE, NULL, NULL);
 	if (window == NULL) { 
@@ -48,24 +53,10 @@ int main() {
 		return -1;
 	}
 
-	// Drawing a triangle setup
-	float vertices[] = {
-		-0.5f, -0.5f, 0.0f,
-		0.5f, -0.5f, 0.0f, 
-		0.0f, 0.5f, 0.0f
-	};
-
-	// creating a VBO to send vertices to GPU memory
-	unsigned int VBO;
-	glGenBuffers(1, &VBO); // assign VBO the id that will be used for the buffer
-	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-
-	// copy vertices to buffer memory
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-	// Create vertex shader object as it needs to be compiled at runtime
-	unsigned int vertexShader;
-	vertexShader = glCreateShader(GL_VERTEX_SHADER);
+	
+    // Build and compile shader program
+    // Create vertex shader object as it needs to be compiled at runtime
+	unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
 	glShaderSource(vertexShader, 1, &vertexShaderSource, NULL); // attach shader code to object
 	glCompileShader(vertexShader);
 
@@ -80,8 +71,7 @@ int main() {
 	}
 
 	// create fragment shader
-	unsigned int fragmentShader;
-	fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+	unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
 	glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
 	glCompileShader(fragmentShader);
 
@@ -92,8 +82,7 @@ int main() {
 	}
 
 	// Create Shader program that links all shaders together
-	unsigned int shaderProgram;
-	shaderProgram = glCreateProgram();
+	unsigned int shaderProgram = glCreateProgram();
 	glAttachShader(shaderProgram, vertexShader);
 	glAttachShader(shaderProgram, fragmentShader);
 	glLinkProgram(shaderProgram);
@@ -102,17 +91,41 @@ int main() {
 	glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
 	if (!success) {
 		glGetProgramInfoLog(shaderProgram, 512, NULL, infolog);
-		std::cout << "ERROR::SHADER::PROGRAM::LINK_FAILED\n" << infolog << "\n";
+		std::cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infolog << "\n";
 	}
-
-	// we can now use the shader program
-	glUseProgram(shaderProgram);
-
 	// we no longer need the vertex and fragment shaders because we've already linked them to shaderProgram
 	glDeleteShader(vertexShader);
 	glDeleteShader(fragmentShader);
 
-	// Render loop
+    // Set up Vertex Data and buffers(VBO, VAO) and configure vertex attributes
+	float vertices[] = {
+		-0.5f, -0.5f, 0.0f,
+		0.5f, -0.5f, 0.0f, 
+		0.0f, 0.5f, 0.0f
+	};
+
+    unsigned int VBO, VAO;
+    glGenVertexArrays(1, &VAO);
+	glGenBuffers(1, &VBO); 
+    
+    // bind VAO first 
+    glBindVertexArray(VAO);
+	glBindBuffer(GL_ARRAY_BUFFER, VBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+    // configure vertex attributes
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    // ??? - unbind the buffer because of VAO, then unbind VAO
+    // this is usually unnecessary
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+	// draw outlines
+	//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+	
+    // Render loop
 	while (!glfwWindowShouldClose(window)) {
 		// Input
 		processInput(window);
@@ -121,10 +134,19 @@ int main() {
 		glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
+	    glUseProgram(shaderProgram);
+        glBindVertexArray(VAO);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+
 		// Checking events and swapping buffers
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
+
+    // deallocate resources
+    glDeleteVertexArrays(1, &VAO);
+    glDeleteBuffers(1, &VBO);
+    glDeleteProgram(shaderProgram);
 
 	// delete GLFW resources that were allocated
 	glfwTerminate();
